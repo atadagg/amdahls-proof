@@ -5,7 +5,7 @@
 #include <limits.h>
 
 #define N 15  // Number of cities
-#define NUM_THREADS 4
+#define MAX_THREADS 8
 
 // Structure to hold city coordinates
 typedef struct {
@@ -57,7 +57,7 @@ int sequentialTSP(City cities[], int n) {
     return totalDistance;
 }
 
-// Parallel TSP implementation using OpenMP
+// Parallel TSP implementation with OpenMP
 int parallelTSP(City cities[], int n) {
     int visited[N] = {0};
     int current = 0;
@@ -68,6 +68,7 @@ int parallelTSP(City cities[], int n) {
         int minDist = INT_MAX;
         int next = -1;
         
+        // Parallelized part
         #pragma omp parallel for reduction(min:minDist) reduction(max:next)
         for (int j = 0; j < n; j++) {
             if (!visited[j]) {
@@ -79,6 +80,7 @@ int parallelTSP(City cities[], int n) {
             }
         }
         
+        // Sequential part
         totalDistance += minDist;
         current = next;
         visited[current] = 1;
@@ -96,27 +98,24 @@ int main() {
     srand(time(NULL));
     generateCities(cities, N);
     
-    // Set number of threads
-    omp_set_num_threads(NUM_THREADS);
-    
-    // Sequential TSP
+    // Run sequential version first
     double start_time = omp_get_wtime();
     int seq_distance = sequentialTSP(cities, N);
     double seq_time = omp_get_wtime() - start_time;
-    
-    // Parallel TSP
-    start_time = omp_get_wtime();
-    int par_distance = parallelTSP(cities, N);
-    double par_time = omp_get_wtime() - start_time;
-    
-    // Print results
-    printf("Number of cities: %d\n", N);
-    printf("Number of threads: %d\n", NUM_THREADS);
-    printf("Sequential distance: %d\n", seq_distance);
-    printf("Parallel distance: %d\n", par_distance);
     printf("Sequential time: %f seconds\n", seq_time);
-    printf("Parallel time: %f seconds\n", par_time);
-    printf("Speedup: %f\n", seq_time / par_time);
+    
+    // Test with different numbers of threads
+    printf("\nThread count, Time(s), Speedup\n");
+    for (int threads = 1; threads <= MAX_THREADS; threads *= 2) {
+        omp_set_num_threads(threads);
+        
+        start_time = omp_get_wtime();
+        int par_distance = parallelTSP(cities, N);
+        double par_time = omp_get_wtime() - start_time;
+        
+        double speedup = seq_time / par_time;
+        printf("%d, %f, %f\n", threads, par_time, speedup);
+    }
     
     return 0;
-} 
+}

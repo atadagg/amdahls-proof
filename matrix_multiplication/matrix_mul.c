@@ -4,7 +4,7 @@
 #include <omp.h>
 
 #define MATRIX_SIZE 1000
-#define NUM_THREADS 4
+#define MAX_THREADS 8
 
 // Initialize matrix with random values
 void init_matrix(double* matrix, int size) {
@@ -61,25 +61,24 @@ int main() {
     init_matrix(A, size);
     init_matrix(B, size);
     
-    // Set number of threads
-    omp_set_num_threads(NUM_THREADS);
-    
-    // Sequential multiplication
+    // Run sequential version first
     double start_time = omp_get_wtime();
     sequential_multiply(A, B, C, size);
     double seq_time = omp_get_wtime() - start_time;
-    
-    // Parallel multiplication
-    start_time = omp_get_wtime();
-    parallel_multiply(A, B, C, size);
-    double par_time = omp_get_wtime() - start_time;
-    
-    // Print results
-    printf("Matrix size: %d x %d\n", size, size);
-    printf("Number of threads: %d\n", NUM_THREADS);
     printf("Sequential time: %f seconds\n", seq_time);
-    printf("Parallel time: %f seconds\n", par_time);
-    printf("Speedup: %f\n", seq_time / par_time);
+    
+    // Test with different numbers of threads
+    printf("\nThread count, Time(s), Speedup\n");
+    for (int threads = 1; threads <= MAX_THREADS; threads *= 2) {
+        omp_set_num_threads(threads);
+        
+        start_time = omp_get_wtime();
+        parallel_multiply(A, B, C, size);
+        double par_time = omp_get_wtime() - start_time;
+        
+        double speedup = seq_time / par_time;
+        printf("%d, %f, %f\n", threads, par_time, speedup);
+    }
     
     // Free memory
     free(A);

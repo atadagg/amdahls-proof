@@ -6,7 +6,7 @@
 
 #define V 1000  // Number of vertices
 #define INF INT_MAX
-#define NUM_THREADS 4
+#define MAX_THREADS 8
 
 // Function to find the vertex with minimum distance value
 int minDistance(int dist[], int sptSet[]) {
@@ -105,25 +105,24 @@ int main() {
     srand(time(NULL));
     generateGraph(graph);
     
-    // Set number of threads
-    omp_set_num_threads(NUM_THREADS);
-    
-    // Sequential Dijkstra
+    // Run sequential version first
     double start_time = omp_get_wtime();
     sequentialDijkstra(graph, 0, dist);
     double seq_time = omp_get_wtime() - start_time;
-    
-    // Parallel Dijkstra
-    start_time = omp_get_wtime();
-    parallelDijkstra(graph, 0, dist);
-    double par_time = omp_get_wtime() - start_time;
-    
-    // Print results
-    printf("Number of vertices: %d\n", V);
-    printf("Number of threads: %d\n", NUM_THREADS);
     printf("Sequential time: %f seconds\n", seq_time);
-    printf("Parallel time: %f seconds\n", par_time);
-    printf("Speedup: %f\n", seq_time / par_time);
+    
+    // Test with different numbers of threads
+    printf("\nThread count, Time(s), Speedup\n");
+    for (int threads = 1; threads <= MAX_THREADS; threads *= 2) {
+        omp_set_num_threads(threads);
+        
+        start_time = omp_get_wtime();
+        parallelDijkstra(graph, 0, dist);
+        double par_time = omp_get_wtime() - start_time;
+        
+        double speedup = seq_time / par_time;
+        printf("%d, %f, %f\n", threads, par_time, speedup);
+    }
     
     return 0;
 } 
