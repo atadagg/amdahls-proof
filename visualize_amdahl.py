@@ -1,6 +1,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
 import os
+from scipy.optimize import curve_fit
 
 def ensure_experiment_dir(experiment_num):
     """Create and return the experiment directory path"""
@@ -8,11 +9,11 @@ def ensure_experiment_dir(experiment_num):
     os.makedirs(exp_dir, exist_ok=True)
     return exp_dir
 
-def amdahls_law(p, n):
+def amdahls_law(n, p):
     """
     Calculate theoretical speedup according to Amdahl's Law
-    p: fraction of program that is parallelizable (0 to 1)
     n: number of processors
+    p: fraction of program that is parallelizable (0 to 1)
     """
     return 1 / ((1 - p) + p/n)
 
@@ -28,7 +29,7 @@ def plot_amdahls_law(experiment_num):
     
     # Plot theoretical curves
     for p, color in zip(fractions, colors):
-        speedup = [amdahls_law(p, i) for i in n]
+        speedup = [amdahls_law(i, p) for i in n]
         plt.plot(n, speedup, color=color, label=f'p={p:.2f}')
     
     # Formatting
@@ -43,50 +44,87 @@ def plot_amdahls_law(experiment_num):
     plt.savefig(os.path.join(exp_dir, 'amdahls_law_theoretical.png'))
     plt.close()
 
-def plot_experimental_results(measured_speedups, algorithm_name, experiment_num):
+def plot_experimental_results(experimental_speedups, algorithm_name, p_value, output_dir, filename_base):
     """
     Plot experimental results against Amdahl's Law
-    measured_speedups: list of (n_threads, speedup) tuples
+    experimental_speedups: list of (n_threads, speedup) tuples
+    algorithm_name: name of the algorithm for the plot title
+    p_value: theoretical parallelizable fraction
+    output_dir: directory to save the plot
+    filename_base: base name for the output file
     """
-    if not measured_speedups:
+    if not experimental_speedups:
         print(f"Warning: No data for {algorithm_name}")
         return
         
-    n_threads, speedups = zip(*measured_speedups)
+    n_threads, speedups = zip(*experimental_speedups)
+    n_threads = np.array(n_threads)
+    speedups = np.array(speedups)
     
-    # Fit Amdahl's law to the experimental data
-    max_speedup = max(speedups)
-    max_threads = n_threads[speedups.index(max_speedup)]
-    p_estimate = (max_speedup - 1) / (max_speedup - 1/max_threads)
-    p_estimate = min(p_estimate, 0.99)  # Cap at 0.99 for realism
+    plt.figure(figsize=(12, 8))
     
-    plt.figure(figsize=(10, 6))
-    
-    # Plot theoretical curve with estimated p
+    # Plot theoretical curve with given p_value
     n = np.linspace(1, max(n_threads), 100)
-    theoretical = [amdahls_law(p_estimate, i) for i in n]
-    plt.plot(n, theoretical, 'b-', label=f'Theoretical (p≈{p_estimate:.2f})')
+    theoretical = [amdahls_law(i, p_value) for i in n]
+    plt.plot(n, theoretical, 'b-', label=f'Theoretical (p={p_value:.2f})')
     
     # Plot experimental data
     plt.plot(n_threads, speedups, 'ro-', label='Experimental')
     
-    # Formatting
-    plt.title(f"Amdahl's Law: {algorithm_name} Implementation")
-    plt.xlabel('Number of Threads')
-    plt.ylabel('Speedup')
-    plt.grid(True, linestyle='--', alpha=0.7)
-    plt.legend()
+    # Add ideal speedup line
+    plt.plot(n, n, 'g--', label='Ideal Speedup', alpha=0.5)
     
-    # Save the plot in experiment directory
-    exp_dir = ensure_experiment_dir(experiment_num)
-    plt.savefig(os.path.join(exp_dir, f'amdahls_law_{algorithm_name.lower().replace(" ", "_")}.png'))
+    # Formatting
+    plt.title(f"Amdahl's Law: {algorithm_name} Implementation", fontsize=14)
+    plt.xlabel('Number of Threads', fontsize=12)
+    plt.ylabel('Speedup', fontsize=12)
+    plt.grid(True, linestyle='--', alpha=0.7)
+    plt.legend(fontsize=10)
+    
+    # Set y-axis to start from 1
+    plt.ylim(bottom=1)
+    
+    # Save the plot
+    plot_path = os.path.join(output_dir, f'{filename_base}.png')
+    plt.savefig(plot_path, dpi=300, bbox_inches='tight')
     plt.close()
     
-    # Save the raw data
-    with open(os.path.join(exp_dir, f'{algorithm_name.lower().replace(" ", "_")}_data.csv'), 'w') as f:
-        f.write("Threads,Speedup\n")
-        for thread, speedup in measured_speedups:
-            f.write(f"{thread},{speedup}\n")
+    print(f"Plot saved to: {plot_path}")
+
+def plot_amdahls_law_theoretical_overview(output_dir):
+    """Plot theoretical Amdahl's Law curves for different p values"""
+    n = np.linspace(1, 16, 100)
+    
+    # Different parallelizable fractions
+    fractions = [0.25, 0.5, 0.75, 0.9, 0.95, 0.99]
+    colors = ['r', 'g', 'b', 'c', 'm', 'y']
+    
+    plt.figure(figsize=(12, 8))
+    
+    # Plot theoretical curves
+    for p, color in zip(fractions, colors):
+        speedup = [amdahls_law(i, p) for i in n]
+        plt.plot(n, speedup, color=color, label=f'p={p:.2f}')
+    
+    # Add ideal speedup line
+    plt.plot(n, n, 'k--', label='Ideal Speedup', alpha=0.5)
+    
+    # Formatting
+    plt.title("Amdahl's Law: Theoretical Speedup vs. Number of Processors", fontsize=14)
+    plt.xlabel('Number of Processors (n)', fontsize=12)
+    plt.ylabel('Speedup', fontsize=12)
+    plt.grid(True, linestyle='--', alpha=0.7)
+    plt.legend(fontsize=10)
+    
+    # Set y-axis to start from 1
+    plt.ylim(bottom=1)
+    
+    # Save the plot
+    plot_path = os.path.join(output_dir, 'amdahls_law_theoretical.png')
+    plt.savefig(plot_path, dpi=300, bbox_inches='tight')
+    plt.close()
+    
+    print(f"Theoretical overview plot saved to: {plot_path}")
 
 if __name__ == "__main__":
     # Example usage with experimental data:
@@ -99,4 +137,4 @@ if __name__ == "__main__":
         (8, 5.1),    # example speedup with 8 threads
     ]
     
-    plot_experimental_results(matrix_speedups, "Matrix Multiplication", 1) 
+    plot_experimental_results(matrix_speedups, "Matrix Multiplication", 0.9, ensure_experiment_dir(1), "amdahls_law_matrix_multiplication") 

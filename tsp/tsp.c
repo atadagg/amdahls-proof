@@ -65,24 +65,60 @@ int parallelTSP(City cities[], int n) {
     visited[0] = 1;
     
     for (int i = 1; i < n; i++) {
-        int minDist = INT_MAX;
-        int next = -1;
+        int global_minDist_for_step = INT_MAX;
+        int next_city_for_step = -1;
         
-        // Parallelized part
-        #pragma omp parallel for reduction(min:minDist) reduction(max:next)
+        // Parallelized part to find the minimum distance to an unvisited city
+        // Each thread will find its local minimum for 'dist_candidate',
+        // and then these local minimums are reduced to find the overall 'global_minDist_for_step'.
+        #pragma omp parallel 
+        {
+            int local_min_dist = INT_MAX;
+            #pragma omp for nowait // nowait can be used if the next step doesn't depend on all threads finishing this exact loop
+            for (int j = 0; j < n; j++) {
+                if (!visited[j]) {
+                    int dist = calculateDistance(cities[current], cities[j]);
+                    if (dist < local_min_dist) {
+                        local_min_dist = dist;
+                    }
+                }
+            }
+            // Reduce all local_min_dist to global_minDist_for_step
+            #pragma omp critical
+            {
+                if (local_min_dist < global_minDist_for_step) {
+                    global_minDist_for_step = local_min_dist;
+                }
+            }
+        } // End of parallel region
+
+        // Sequentially find the first city 'j' that matches this global_minDist_for_step
+        // This ensures a deterministic tie-break (e.g., smallest index 'j')
+        if (global_minDist_for_step == INT_MAX && n > 1 && i < n) {
+            // This case implies no unvisited city was found, which shouldn't happen
+            // in a connected graph if i < n. Could add error or break.
+            // For safety, if it happens, break to avoid infinite loop or bad access.
+            break;
+        }
+
         for (int j = 0; j < n; j++) {
             if (!visited[j]) {
-                int dist = calculateDistance(cities[current], cities[j]);
-                if (dist < minDist) {
-                    minDist = dist;
-                    next = j;
+                if (calculateDistance(cities[current], cities[j]) == global_minDist_for_step) {
+                    next_city_for_step = j;
+                    break; // Found the first one, break for smallest index tie-breaking
                 }
             }
         }
         
+        if (next_city_for_step == -1) {
+            // All cities visited or no path found.
+            // If i < n, this implies an issue or isolated unvisited cities.
+            break; 
+        }
+
         // Sequential part
-        totalDistance += minDist;
-        current = next;
+        totalDistance += global_minDist_for_step;
+        current = next_city_for_step;
         visited[current] = 1;
     }
     

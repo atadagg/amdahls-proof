@@ -10,15 +10,31 @@
 
 // Function to find the vertex with minimum distance value
 int minDistance(int dist[], int sptSet[]) {
-    int min = INF, min_index;
+    int min = INF;
+    int min_index = -1; // Initialize to -1 to indicate no valid index found yet
     
-    #pragma omp parallel for reduction(min:min_index)
-    for (int v = 0; v < V; v++) {
-        if (sptSet[v] == 0 && dist[v] <= min) {
-            min = dist[v];
-            min_index = v;
+    #pragma omp parallel 
+    {
+        int local_min = INF;
+        int local_min_index = -1;
+        
+        #pragma omp for nowait
+        for (int v = 0; v < V; v++) {
+            if (sptSet[v] == 0 && dist[v] <= local_min) {
+                local_min = dist[v];
+                local_min_index = v;
+            }
+        }
+        
+        #pragma omp critical
+        {
+            if (local_min < min || (local_min == min && local_min_index < min_index)) {
+                min = local_min;
+                min_index = local_min_index;
+            }
         }
     }
+    
     return min_index;
 }
 
